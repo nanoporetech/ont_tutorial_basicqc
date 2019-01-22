@@ -1,0 +1,14 @@
+channels:
+  - bioconda
+  - conda-forge
+  - r
+  - sagrudd
+dependencies:
+  - snakemake-minimal =5.2.4
+  - python =3.6
+  - r-essentials
+  - r =3.5.1
+  - r-base
+  - rstudio
+  - nanopore-r-basicqc
+  - r-fastmatch

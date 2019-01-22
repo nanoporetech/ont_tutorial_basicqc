@@ -1,0 +1,18 @@
+
+inputFile:   "RawData/lambda_sequencing_summary.txt.bz2"
+barcodeFile: "RawData/lambda_barcoding_summary.txt.bz2"
+basecaller:  "Guppy 2.1.3"
+flowcellId:  "FAK41706"
+tutorialText: TRUE
+
+# **inputFile** - this should be the sequencing_summary.txt from Guppy etc
+# move your own sequence_summary.txt file (or concatenation thereof) to the
+# RawData folder to run analysis on your own sequence collection
+
+# **barcodeFile** - if Guppy_barcoder has been used to demultiplex library,
+# move the barcoding_summary.txt file to the RawData folder and update variable
+
+# **basecaller** and **flowcellId** - are used for presentation in report
+# please update to correspond to your sequence analysis
+
+# change the **tutorialText** value to FALSE to mask  tutorial instructions

@@ -1,0 +1,789 @@
+---
+title: "Nanopore Summary Statistics and Basic QC tutorial"
+date: "Report created: `r Sys.Date()`"
+output:
+  html_document:
+    keep_md: yes
+    number_sections: yes
+    self_contained: yes
+    theme: default
+    highlight: null
+    css: Static/ont_tutorial.css
+    toc: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+    df_print: paged
+link-citations: yes
+bibliography: Static/Bibliography.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+knitr::opts_chunk$set(fig.width=9, fig.height=6, warning=FALSE, message=FALSE)
+
+library(data.table)
+library(digest)
+library(dplyr)
+library(plyr)
+library(emojifont)
+library(extrafont)
+library(ggplot2)
+library(knitr)
+library(RColorBrewer)
+library(tufte)
+library(caTools)
+library(yaml)
+library(fastmatch)  # added to accommodate the guppy barcode content
+
+config <- yaml.load_file("config.yaml")
+inputFile      <- config$inputFile
+flowcellId     <- config$flowcellId
+basecaller     <- config$basecaller
+tutorialText   <- config$tutorialText
+
+# core parameters used for the presentation and configuration of report
+# not to be moved to config.yaml (yet)
+qcThreshold <- 7
+binFilter <- 5
+scaling <- 1
+reportDPI <- 90
+
+# make a results directory
+dir.create("Results", showWarnings = FALSE)
+
+slurpContent <- function(filename) {
+  include = as.logical(tutorialText)
+  if (include) {
+    paste(readLines(filename),collapse="\n")
+  }
+}
+
+```
+
+
+`r slurpContent("Static/TutorialPreamble.md")`
+
+
+# Executive Summary
+
+
+```{r executivesummary, fig.fullwidth = TRUE, echo=FALSE}
+
+# Using fread for fast and friendly import of sequence_summary file
+# no definition of column types to speed import and allow for merged files
+# could be worthwhile to fread(select=) to select only a subset of columns - this could
+# preclude e.g. barcode data or different versions?
+sequencedata <- data.table::fread(inputFile, stringsAsFactors=FALSE)
+
+# remove the redundant headers from merged files
+if (length(which(sequencedata[,1]=="filename")) > 0) {
+  sequencedata <- sequencedata[-which(sequencedata[,1]=="filename"),]
+}
+
+# coerce the columns used in analytics into more appropriate data-types 
+sequencedata$channel<-as.numeric(sequencedata$channel)
+sequencedata$start_time<-as.numeric(sequencedata$start_time)
+sequencedata$duration<-as.numeric(sequencedata$duration)
+sequencedata$num_events<-as.numeric(sequencedata$num_events)
+sequencedata$sequence_length_template<-as.numeric(sequencedata$sequence_length_template)
+sequencedata$mean_qscore_template<-as.numeric(sequencedata$mean_qscore_template)
+
+# passes_filtering is a useful flag; but there are examples of sequencing_summary.txt where this 
+# is not present - https://github.com/a-slide/pycoQC/blob/master/pycoQC/data/sequencing_summary_1D_DNA_Albacore_1.2.1.txt
+if (! "passes_filtering" %in% colnames(sequencedata)) {
+  # set all of the reads to pass? apply a cutoff?
+  sequencedata$passes_filtering <- TRUE
+} else {
+  sequencedata$passes_filtering <- as.logical(sequencedata$passes_filtering)
+}
+# create a convenient separation of pass and fail ...
+passedSeqs <- sequencedata[which(sequencedata$passes_filtering), ]
+failedSeqs <- sequencedata[which(!sequencedata$passes_filtering), ]
+
+```
+
+
+
+
+
+
+```{r pseudoValueBox, include=TRUE, echo=FALSE, fig.fullwidth = TRUE, dpi=360, fig.width=9, fig.height=2.5}
+
+# calculate some basec, but key, metrics
+readCount <- formatC(nrow(sequencedata), big.mark=",")
+totalBases = sum(sequencedata$sequence_length_template,na.rm=T)/10^9
+passedBases = sum(passedSeqs$sequence_length_template,na.rm=T)/10^9
+gigabases <- round(totalBases,2)
+
+# prepare a data object to render a summary graphic
+figures <- 3
+df <- data.frame(
+    x = cumsum(c(2, rep(6.5, figures-1))),
+    y = rep(2, figures),
+    h = rep(4, figures),
+    w = rep(6, figures))
+
+df$info <- c("flowcell", readCount, gigabases)
+df$key <- c(flowcellId,"Reads produced", "gigabases called")
+df$icon <- fontawesome(c('fa-qrcode', 'fa-filter', 'fa-file-text-o'))
+df$colour <- rep("steelblue", figures)
+
+
+# and display the plot
+ExecutiveSummaryValueBoxes <- ggplot(df, aes(x, y, height = h, width = w, label = key, fill = colour)) +
+    geom_tile(fill = brewer.pal(9,"Blues")[7]) +
+    geom_text(color = brewer.pal(9,"Blues")[3], hjust="left", nudge_y=-1.5, nudge_x=-2.6, size=5) +
+    geom_text(label=df$info, size=10, color = brewer.pal(9,"Blues")[2], fontface = "bold", nudge_x=-2.6, hjust="left") +
+    geom_text(label=df$icon, family='fontawesome-webfont', colour=brewer.pal(9,"Blues")[5], size=23, hjust="right", nudge_x=2.85, nudge_y=0.8) +
+    coord_fixed() + 
+    theme_void() +
+    guides(fill = F)
+
+# some juggling here to prepare a plot that can be rendered across platforms = windows/linux/osx
+ggsave(file.path("Results", "ExecutiveSummaryValueBoxes.png"), plot=ExecutiveSummaryValueBoxes, device="png", units="cm", width=25, height=5, dpi=reportDPI)
+knitr::include_graphics(file.path("Results", "ExecutiveSummaryValueBoxes.png"))
+
+```
+
+Basecalling was performed using the **`r config$basecaller`** software. Called reads were classified as either pass or fail depending on their mean quality score. For this analysis, a total of `r formatC(nrow(sequencedata), big.mark=",")` reads were basecalled and of these `r formatC(nrow(passedSeqs), big.mark=",")` (`r round(nrow(passedSeqs) / nrow(sequencedata) * 100, 1)`%) were passed as satsifying the quality metric. The passed reads contain a total of `r round(passedBases, 2)` Gbp of DNA sequence. This passed-fraction amounts to `r round(passedBases / totalBases * 100, 1)`% of the total DNA nucleotide bases sequenced.
+
+
+
+```{r qcPassGauge, echo=FALSE, include=TRUE, fig.margin=TRUE}
+df <- data.frame(matrix(nrow=1, ncol = 3))
+
+names(df) <- c("variable", "percentage","label")
+df$variable <- c("pass")
+df$percentage <- c(round(length(which(sequencedata$passes_filtering==TRUE)) / nrow(sequencedata), 3))
+
+df <- df %>% mutate(group=ifelse(percentage <0.6, "red",
+ ifelse(percentage>=0.6 & percentage<0.8, "orange","green")),
+ label=paste0(df$percentage*100, "%"))
+
+title="Percentage of reads\npassing QC filter"
+
+ggplot(df, aes(fill = group, ymax = percentage, ymin = 0, xmax = 2, xmin = 1)) +
+ geom_rect(aes(ymax=1, ymin=0, xmax=2, xmin=1), fill ="#ece8bd") +
+ geom_rect() + 
+ coord_polar(theta = "y",start=-pi/2) + xlim(c(0, 2)) + ylim(c(0,2)) +
+  guides(fill=FALSE) +
+  guides(colour=FALSE) +
+  theme_void() +
+  theme(strip.background = element_blank(), strip.text.x = element_blank()) +
+  geom_text(aes(x = 0, y = 0, label = label), size=13) +
+  geom_text(aes(x=1.5, y=1.5, label=title), size=11) +
+  scale_fill_manual(values = c("red"="#C9146C", "orange"="#DA9112", "green"="#129188")) +
+  scale_colour_manual(values = c("red"="#C9146C", "orange"="#DA9112", "green"="#129188"))
+
+```
+
+\newpage
+
+
+# Sequencing channel activity plot
+
+The nanopores through which DNA is passed, and signal collected, are arrayed as a 2-dimensional matrix. A heatmap can be plotted such that channel productivity can be shown against spatial position on the matrix. Such a plot enables the identification of spatial artifacts that could result from membrane damage through e.g. the introduction of an air-bubble. This heatmap representation of spatial activity shows only gross spatial aberations; the activity plot below shows the number of sequences produced per channel, not per pore. 
+
+
+
+```{r channel_plot, include=TRUE, echo=FALSE, fig.fullwidth = TRUE}
+# create an empty read count container ... MinION or PromethION??
+
+# https://gist.github.com/roblanf/df47b9748c3aae00809cc675aca79989
+# build the map for R9.5 flowcell, as a long-form dataframe that translates
+# channels into rows and columns on the flowcell. Good for plotting in R.
+p1 = data.frame(channel=33:64, row=rep(1:4, each=8), col=rep(1:8, 4))
+p2 = data.frame(channel=481:512, row=rep(5:8, each=8), col=rep(1:8, 4))
+p3 = data.frame(channel=417:448, row=rep(9:12, each=8), col=rep(1:8, 4))
+p4 = data.frame(channel=353:384, row=rep(13:16, each=8), col=rep(1:8, 4))
+p5 = data.frame(channel=289:320, row=rep(17:20, each=8), col=rep(1:8, 4))
+p6 = data.frame(channel=225:256, row=rep(21:24, each=8), col=rep(1:8, 4))
+p7 = data.frame(channel=161:192, row=rep(25:28, each=8), col=rep(1:8, 4))
+p8 = data.frame(channel=97:128, row=rep(29:32, each=8), col=rep(1:8, 4))
+
+q1 = data.frame(channel=1:32, row=rep(1:4, each=8), col=rep(16:9, 4))
+q2 = data.frame(channel=449:480, row=rep(5:8, each=8), col=rep(16:9, 4))
+q3 = data.frame(channel=385:416, row=rep(9:12, each=8), col=rep(16:9, 4))
+q4 = data.frame(channel=321:352, row=rep(13:16, each=8), col=rep(16:9, 4))
+q5 = data.frame(channel=257:288, row=rep(17:20, each=8), col=rep(16:9, 4))
+q6 = data.frame(channel=193:224, row=rep(21:24, each=8), col=rep(16:9, 4))
+q7 = data.frame(channel=129:160, row=rep(25:28, each=8), col=rep(16:9, 4))
+q8 = data.frame(channel=65:96, row=rep(29:32, each=8), col=rep(16:9, 4))
+
+# long form as a data frame, i.e. map$channel[[1]] returns 33
+channelMap = rbind(p1, p2, p3, p4, p5, p6, p7, p8, q1, q2, q3, q4, q5, q6, q7, q8)
+
+hm.palette <- colorRampPalette(brewer.pal(9, 'Blues'), space='Lab') #RdPu, Oranges, Greens, YlOrRd, Purples
+
+channelCounts <- as.data.frame(matrix(rep(0, 512), ncol=1))
+channelCountRaw <- as.data.frame(table(unlist(sequencedata[, "channel"])), row.names=1)
+channelCounts[row.names(channelCountRaw),] <- channelCountRaw[,1]
+#channelMap <- cbind(channelMap[channelMap$channel,], frequency=channelCounts[channelMap$channel,])
+channelMap <- merge(channelMap, channelCounts, by.x="channel", by.y=0)
+colnames(channelMap)[4]<-"count"
+channelMapMatrix <- reshape2::acast(channelMap, col ~ row, value.var = "count")
+
+theme_update(plot.title = element_text(hjust = 0.5))
+
+ggplot(channelMap, aes(x = row, y = col, fill = count)) +
+    geom_tile() +
+    geom_text(data=channelMap,aes(x=row, y=col,label=count,color=count),show.legend = F, size=2.5) +
+    scale_x_discrete(breaks=NULL) +
+    scale_y_discrete(breaks=NULL) +
+    coord_equal() +
+    scale_fill_gradientn(colours = hm.palette(100)) +
+    scale_color_gradient2(low = hm.palette(100), high = hm.palette(1)) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+    labs(title="Channel activity plot showing number of reads per flowcell channel") +
+    theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position="bottom",
+        legend.key.width=unit(5.6,"cm"))
+
+```
+
+
+
+
+\pagebreak
+
+# Quality and length
+
+The distribution of base-called DNA sequence lengths and their accompanying qualities are key metrics for the review of a sequencing library. This section of the QC review tutorial assesses the length and quality distributions for reads from this flowcell. This section is reviewing the total collection of sequences that both pass and fail the mean quality filter.
+
+
+```{r summaryStatMeasures, include=FALSE, echo=FALSE}
+
+lenSorted <- rev(sort(passedSeqs$sequence_length_template))
+passedMeanLength = round(mean(lenSorted), digits = 0)
+N50 <- lenSorted[cumsum(lenSorted) >= sum(lenSorted)*0.5][1]
+passedMeanQ = round(mean(passedSeqs$mean_qscore_template), digits = 1)
+failedMeanQ = round(mean(failedSeqs$mean_qscore_template), digits = 1)
+
+#N50 length is the length of the shortest contig such that the sum of contigs of equal length or longer is at least 50% of the total length of all contigs
+```
+
+
+```{r seqInfoPlot, include=TRUE, echo=FALSE, fig.fullwidth = TRUE, dpi=360, fig.width=9, fig.height=2}
+
+figures <- 5
+
+df <- data.frame(
+    x = cumsum(c(2, rep(6.5, figures-1))),
+    y = rep(2, figures),
+    h = rep(4, figures),
+    w = rep(6, figures))
+
+    df$info <- c(passedMeanLength, N50, passedMeanQ, failedMeanQ, prettyNum(max(passedSeqs$sequence_length_template), big.mark=","))
+    df$key <- c("Mean Read Length (nt)","N50","Mean Read Quality (QV)","Mean Failed QV","Longest Read")
+    df$icon <- fontawesome(c("fa-bar-chart", "fa-play", "fa-area-chart", "fa-bug", "fa-sort"))
+
+    df$colour <- rep("steelblue", figures)
+
+ReadCharacteristicsValueBoxes <- ggplot(df, aes(x, y, height = h, width = w, label = key, fill = colour)) +
+    geom_tile(fill = brewer.pal(9,"Blues")[7]) +
+    geom_text(color = brewer.pal(9,"Blues")[3], hjust="left", nudge_y=-1.5, nudge_x=-2.6, size=3.5) +
+    geom_text(label=df$info, size=5.5, color = brewer.pal(9,"Blues")[2], fontface = "bold", nudge_x=-2.6, hjust="left") +
+    geom_text(label=df$icon, family='fontawesome-webfont', colour=brewer.pal(9,"Blues")[5], size=13.3, hjust="right", nudge_x=2.85, nudge_y=0.8) +
+    coord_fixed() + 
+    scale_fill_brewer(type = "qual",palette = "Dark2") +
+    theme_void() +
+    guides(fill = F)
+
+
+
+ggsave(file.path("Results", "ReadCharacteristicsValueBoxes.png"), plot=ReadCharacteristicsValueBoxes, device="png", units="cm", width=25, height=5, dpi=reportDPI)
+
+knitr::include_graphics(file.path("Results", "ReadCharacteristicsValueBoxes.png"))
+
+```
+
+
+The distribution of sequence lengths will be dependent on the protocols that have been used to extract and/or prepare the starting DNA. Sequences from amplicon DNA will have a tight distribution of read lengths, while sequences from genomic DNA will have a broader distribution of sheared DNA product. The distribution will be further influenced if a size-selection step has been used, and will also be dependent on the choice of sequencing library preparation kits. The read length distribution should be assessed to see if the distribution is concordant with that expected.
+
+\hfill\break
+
+```{r lengthdistribution, include=TRUE, cache=FALSE, fig.fullwidth=FALSE, echo=FALSE}
+
+# https://stackoverflow.com/questions/6461209/how-to-round-up-to-the-nearest-10-or-100-or-x
+roundUpNice <- function(x, nice=seq(from=1, to=10, by=0.25)) {
+    if(length(x) != 1) stop("'x' must be of length 1")
+    10^floor(log10(x)) * nice[[which(x <= 10^floor(log10(x)) * nice)[[1]]]]
+}
+
+# pick a friendly upper limit to render sequence lengths into a histogram
+# here we're aiming for a robustly rounded up 97.5 quantile of the data (skip a few outliers ...)
+upperLimit <- roundUpNice(as.numeric(quantile(x=sequencedata$sequence_length_template, probs=c(0.975))))
+
+# an ideal histogram will have 40 or so bins
+histogramBinCount <- 40
+breakVal = roundUpNice(upperLimit / histogramBinCount)
+
+breaks <- seq(0, to=upperLimit, by=breakVal)
+assgnd.pass <- table(
+  cut(subset(sequencedata, passes_filtering==TRUE & sequence_length_template > 1)$sequence_length_template, breaks, include.lowest = TRUE, right=FALSE))
+
+assgnd.fail <- table(cut(subset(sequencedata, passes_filtering==FALSE & sequence_length_template > 1)$sequence_length_template, breaks, include.lowest = TRUE, right=FALSE))
+
+lengthdist <- data.frame(length=head(breaks, -1), pass=as.vector(assgnd.pass), fail=as.vector(assgnd.fail))
+
+lendistmlt <- reshape2::melt(lengthdist, id.vars=c("length"))
+
+
+ggplot(lendistmlt, aes(x=length, fill=variable, y=value)) +
+  geom_bar(stat="identity") +
+  xlab("Read length\n") + ylab("Number of reads\n") +
+  scale_fill_manual("Read QC", values=c("fail"=brewer.pal(6, "Paired")[1], "pass"=brewer.pal(6, "Paired")[2])) +
+  scale_x_continuous(limits=c(-breakVal,upperLimit), breaks=pretty(passedSeqs$sequence_length_template,n=40)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title="Histogram showing distribution of read lengths across quality passing sequences", fill="QV filter")+
+    geom_vline(xintercept = N50, size = 1) +
+    annotate("text", x=N50, y=max(assgnd.pass + assgnd.fail), label = " N50", hjust=0, colour="SteelBlue") +
+    geom_vline(xintercept = passedMeanLength, size = 1) +
+    annotate("text", x=passedMeanLength, y=max(assgnd.pass + assgnd.fail), label = " Mean", hjust=0, colour="SteelBlue")
+
+```
+
+
+\hfill\break
+A histogram of mean QV scores reveals the relative abundance of sequences of different qualities. The distribution of sequence qualities is shaded by the QV filter pass status. This QV filter is applied during the base-calling process as a modifiable parameter. For downstream analyses it is recommended to process only the higher quality sequence reads. 
+\hfill\break
+
+```{r QvalueDistributions, include=TRUE, cache=FALSE, echo=FALSE, fig.margin=FALSE}
+
+ggplot(sequencedata, aes(x=mean_qscore_template, fill=passes_filtering)) + 
+    geom_histogram(breaks=seq(from=0, to=15, by=0.1)) +
+      scale_fill_manual(values=c("FALSE"=brewer.pal(6, "Paired")[1], "TRUE"=brewer.pal(6, "Paired")[2])) +
+    labs(title="Plot showing distribution of quality scores across all reads") +
+    xlab("Mean Q score of read") +
+    ylab("Number of reads")
+```
+
+
+
+\hfill\break
+The density plot of mean sequence quality plotted against log10 sequence length is a useful graphic to show patterns within the broader sequence collection. The density plot shown in the figure below has been de-speckled in that the rarer sequence bins containing only `r binFilter` reads or less have been omitted. This is mainly aesthetic and masks some speckle around the periphery of the main density map. 
+\hfill\break
+
+
+```{r lengthQualityDensityPlots, include=TRUE, cache=FALSE, echo=FALSE, warning=FALSE}
+# prepare the density plot, but do not render
+lq_dens <- ggplot(sequencedata, aes(log10(sequence_length_template), mean_qscore_template)) + geom_bin2d(bins=100)
+# extract the density map from the plot
+lq_dens_counts <- ggplot_build(lq_dens)$data[[1]]
+if (binFilter > 0) {
+  # remove the bins from the density map that do not contain sequence count above threshold 
+  lq_dens_counts <- lq_dens_counts[-which(lq_dens_counts$count <= binFilter),]
+}
+# directly plot this modified density map (stat=="identity")
+ggplot(lq_dens_counts) + 
+  geom_bin2d(aes(x,y,fill=count), stat="identity") +
+  scale_fill_distiller(palette="Blues", trans="reverse") + 
+  geom_hline(yintercept = qcThreshold, size = 1) + 
+  xlab("log10(read length)") + 
+  ylab("read mean quality") + 
+  scale_x_continuous(breaks = c(1,2,3,4,5), label = c("10", "100", "1000", "10,000", "100,000")) +
+  annotation_logticks(base = 10, sides = "b", scaled = TRUE) +
+  labs(title="Contour Plot showing distribution of quality scores against log10 read lengths (all reads)")
+
+
+```
+
+
+
+\pagebreak
+
+# Time/Duty Performance
+
+Another key metric in the quality review of a sequencing run is an analysis of the temporal performance of the run. During a run each sequencing channel will address a number of different pores (mux) and the individual pores may become temporarily or permanently blocked. It is therefore expected that during a run sequencing productivity will decrease; it is useful to consider whether the observed productivity decline is normal or if it happens more rapidly than expected. A rapid pore decline could be indicative of contaminants with the sequencing library.
+
+\hfill\break
+
+Plotting the number of bases generated per unit time over the course of a sequencing run can reveal unexpected behaviours. In an ideal experiment there should not be any sudden decreases in performance.
+
+
+```{r basesPerTimeBin, include=TRUE, cache=FALSE, echo=FALSE}
+
+sequencedata$start_time <- sequencedata$start_time - min(sequencedata$start_time)
+sequencedata$start_time <- sequencedata$start_time / scaling
+
+# assuming a 48 hour run, 5 minute intervals
+sampleHours = 48
+sampleIntervalMinutes = 60
+
+breaks = seq(0, sampleHours*60*60, by=60*sampleIntervalMinutes)
+binass <- findInterval(sequencedata$start_time, breaks)
+
+mergeItPerHour <- function(interval, binnedAssignments, filter) {
+  totalbases = 0
+  if (length(which(binnedAssignments==interval))>0) {
+    subset <- sequencedata[which(binnedAssignments==interval), ]
+    if (length(which(subset$passes_filtering == filter)) > 0) {
+      totalbases = sum(subset[which(subset$passes_filtering == filter), "sequence_length_template"])
+    }
+  }
+  # need to scale what is being returned - totalbases value is total bases within an interval (sampleIntervalMinutes)
+  return(totalbases / 1e9 / sampleIntervalMinutes * 60)
+}
+
+binnedTemporalDataPerHour <- data.frame(
+  cbind(
+    time=breaks,
+    pass=unlist(lapply(seq(breaks), mergeItPerHour, binnedAssignments=binass,filter=TRUE)),
+    fail=unlist(lapply(seq(breaks), mergeItPerHour, binnedAssignments=binass, filter=FALSE))
+  )
+)
+
+binnedTemporalDataPerHour$time <- binnedTemporalDataPerHour$time / 60 / 60
+
+ggplot(binnedTemporalDataPerHour, aes(time)) +
+  geom_line(aes(y = fail, colour = "fail"), size=1) + 
+  geom_line(aes(y = pass, colour = "pass"), size=1) +
+  scale_color_manual(name="Reads passing QV 7", values=c("fail"=brewer.pal(6, "Paired")[1], "pass"=brewer.pal(6, "Paired")[2])) +
+  xlab("Time (hours)") + 
+  ylab("Gigabases sequenced per hour (Gbp/hr)") + 
+  labs(title="Plot showing sequence throughput against time")
+
+```
+
+
+The temporal data presented in the figure above has been scaled to gigabases of sequence produced per hour. For a finer resolution of performance the **`R`** code that prepares this report could be modified for a more frequent sample interval. 
+
+
+```{r temporalPerformance, echo=FALSE}
+
+# binnedTemporalDataPerHour is scaled to Gbp per hour - rescale to raw for cumulative plotting
+binnedTemporalDataPerHour$pass <- binnedTemporalDataPerHour$pass / 60 * sampleIntervalMinutes
+binnedTemporalDataPerHour$fail <- binnedTemporalDataPerHour$fail / 60 * sampleIntervalMinutes
+
+# https://stackoverflow.com/questions/31404679/can-ggplot2-find-the-intersections-or-is-there-any-other-neat-way
+acquireTimePoints <- which(binnedTemporalDataPerHour$pass > 0)
+targetInterpolate <- approxfun(x=binnedTemporalDataPerHour[acquireTimePoints, "time"], y=cumsum(binnedTemporalDataPerHour[acquireTimePoints, "pass"]))
+
+base50 <- sum(passedSeqs$sequence_length_template)/1e9*0.5
+base90 <- sum(passedSeqs$sequence_length_template)/1e9*0.9
+
+T50 <- optimize(function(t0) abs(targetInterpolate(t0) - base50), 
+                interval = range(binnedTemporalDataPerHour[acquireTimePoints, "time"]))
+T90 <- optimize(function(t0) abs(targetInterpolate(t0) - base90), 
+                interval = range(binnedTemporalDataPerHour[acquireTimePoints, "time"]))
+```
+
+In addition to plotting the temporal production of data, a cumulative plot shows how data is accumulated during the run. From this dataset, we have measured a total of `r round(sum(passedSeqs$sequence_length_template)/1e9, 2)` Gigabases of quality passing sequence. We can identify the timepoint T50 such that 50% of sequenced bases have been collected within this time - or `r round(T50$minimum, 2)` hours in this example. This is displayed on the graph along with T90, the time at which 90% of the sequenced based have been acquired.
+
+
+
+```{r cumulativeSequencePlotBP, include=TRUE, cache=FALSE, echo=FALSE, fig.margin=FALSE}
+
+ggplot(binnedTemporalDataPerHour, aes(time)) +
+  geom_line(aes(y = cumsum(fail), colour = "fail"), size=1) + 
+  geom_line(aes(y = cumsum(pass), colour = "pass"), size=1) +
+   scale_color_manual(name="Reads passing QV 7", values=c("fail"=brewer.pal(6, "Paired")[1], "pass"=brewer.pal(6, "Paired")[2])) +
+  geom_segment(x=T50$minimum, y=0, xend=T50$minimum, yend=base50, colour="darkgray", size=1) +
+  geom_segment(x=0, y=base50, xend=T50$minimum, yend=base50, colour="darkgray", size=1) +
+  annotate("text", x=T50$minimum, y=base50, label=" T50", vjust=1, hjust=0, colour="SteelBlue") +
+  geom_segment(x=T90$minimum, y=0, xend=T90$minimum, yend=base90, colour="darkgray", size=1) +
+  geom_segment(x=0, y=base90, xend=T90$minimum, yend=base90, colour="darkgray", size=1) +
+  annotate("text", x=T90$minimum, y=base90, label=" T90", vjust=1, hjust=0, colour="SteelBlue") +
+  xlab("Time (hours)") + 
+  ylab("Number of bases sequenced (Gigabases)") + 
+  labs(title="Plot showing cumulative bases sequenced against time")
+
+```
+
+
+
+
+
+
+
+
+\hfill\break
+
+In addition to the cumulative plot of sequenced bases, an equivalent plot for the sequenced reads can be plotted. This is not too dissimilar in structure or morphology to the cumulative baseplot. 
+
+
+
+
+```{r cumulativeSequencePlotReads, include=TRUE, cache=FALSE, echo=FALSE, fig.margin=TRUE}
+
+mergeItReadsPerHour <- function(interval, binnedAssignments,filter) {
+  totalreads = 0
+  if (length(which(binnedAssignments==interval))>0) {
+    subset <- sequencedata[which(binnedAssignments==interval), ]
+    if (length(which(subset$passes_filtering == filter)) > 0) {
+      totalreads = nrow(subset[which(subset$passes_filtering == filter),])
+    }
+  }
+  # scale results to mean millions of reads per hour
+  return(totalreads/ 1e6 / sampleIntervalMinutes * 60)
+}
+
+binnedTemporalDataReadsPerHour <- data.frame(
+  cbind(time=breaks,
+        pass=unlist(lapply(seq(breaks), mergeItReadsPerHour, binnedAssignments=binass, filter=TRUE)),
+        fail=unlist(lapply(seq(breaks), mergeItReadsPerHour, binnedAssignments=binass, filter=FALSE))
+    )
+)
+
+binnedTemporalDataReadsPerHour$time <- binnedTemporalDataReadsPerHour$time / 60 / 60
+# binnedTemporalDataReadsPerHour is scaled to Gbp per hour - rescale to raw for cumulative plotting
+binnedTemporalDataReadsPerHour$pass <- binnedTemporalDataReadsPerHour$pass / 60 * sampleIntervalMinutes
+binnedTemporalDataReadsPerHour$fail <- binnedTemporalDataReadsPerHour$fail / 60 * sampleIntervalMinutes
+
+ggplot(binnedTemporalDataReadsPerHour, aes(time)) +
+  geom_line(aes(y = cumsum(fail), colour = "fail"), size=1) + 
+  geom_line(aes(y = cumsum(pass), colour = "pass"), size=1) +
+   scale_color_manual(name="Reads passing QV 7", values=c("fail"=brewer.pal(6, "Paired")[1], "pass"=brewer.pal(6, "Paired")[2])) +
+  xlab("Time (hours)") + 
+  ylab("Number of reads sequenced (Millions)") + 
+  labs(title="Plot showing cumulative reads sequenced against time")
+
+```
+
+
+\hfill\break
+
+The speed/time plot is a useful tool to observe any profound changes in sequencing speed can be measured. A marked slow-down in sequencing speed can indicate challenges within the sequencing chemistry that could have been caused by the DNA isolation or abundance of small DNA fragments. Please contact our technical team if you see a profound slowdown with your sequencing.
+
+
+```{r timeSpeedPlot, include=TRUE, cache=FALSE, echo=FALSE}
+
+speedTime <- data.frame(segment=binass, rate=sequencedata$sequence_length_template / (sequencedata$duration/scaling))
+
+ggplot(speedTime, aes(x=segment, y=rate, group=segment)) + geom_boxplot(fill="steelblue", outlier.shape=NA) +scale_x_continuous(name="Time (hours)") + ylab("Sequencing rate (bases per second)") + labs(title="boxplot showing distribution of sequencing speed against time")
+
+```
+
+
+
+The data points shown in the speed-time plot have been filtered such that outlying sequences (sequences beyond the 95% range) have been masked. The distribution of the boxplots and their 'whiskers' are unchanged.
+
+
+
+
+
+```{r activeChannelsPlot, include=TRUE, cache=FALSE, echo=FALSE}
+
+mergeActiveChannels <- function(interval, binnedAssignments) {
+  totalChannels = 0
+  if (length(which(binnedAssignments==interval))>0) {
+    subset <- sequencedata[which(binnedAssignments==interval), ]
+    totalChannels = length(unique(subset$channel))
+  }
+  return(totalChannels)
+}
+
+
+binnedTemporalChannels <- data.frame(time=breaks,
+        channels=unlist(lapply(seq(breaks), mergeActiveChannels, binnedAssignments=binass)
+  )
+)
+
+binnedTemporalChannels$time <- binnedTemporalChannels$time / 60 / 60
+
+ggplot(binnedTemporalChannels, aes(time)) +
+  geom_step(aes(y = channels), size=1, colour = "Steelblue") +
+  xlab("Time (hours)") + 
+  ylab("Number of channels producing data") + 
+  labs(title="Plot showing number of functional channels against time")
+
+
+```
+
+
+\pagebreak
+
+# Demultiplexing
+
+
+```{r demultiplex, cache=FALSE, echo=FALSE}
+barcodes = 0
+barcodeUnass = 0
+barcodeRange <- c(0,0)
+
+# if barcode_arrangement is lacking this could still be guppy called sequence?
+if (!"barcode_arrangement" %in% colnames(passedSeqs)) {
+  
+  if ("barcodeFile" %in% names(config) && file.exists(config$barcodeFile)) {
+      barcodedata <- data.table::fread(config$barcodeFile, select=c("read_id", "barcode_arrangement"), showProgress=TRUE, stringsAsFactors=FALSE)
+    pso <- order(passedSeqs$read_id, method="radix")
+    passedSeqs <- passedSeqs[pso, ]
+  
+    bco <- order(barcodedata$read_id, method="radix")
+    barcodedata <- barcodedata[bco, ]
+    
+    barcodeMapping <- fmatch(passedSeqs$read_id, barcodedata$read_id)
+    passedSeqs$barcode_arrangement <- barcodedata[barcodeMapping,c("barcode_arrangement")]
+  }
+
+}
+```
+
+
+```{r demultiplexB, cache=FALSE, echo=FALSE}
+if ("barcode_arrangement" %in% names(passedSeqs)) {
+  barcode=plyr::count(passedSeqs$barcode_arrangement)
+  barcode=subset(barcode, freq > 150)
+  if ("unclassified" %in% barcode$x) {
+    barcodes <- nrow(barcode[-which(barcode$x=="unclassified"),])
+    barcodeUnass <- sum(barcode[-which(barcode$x=="unclassified"),"freq"]) / sum(barcode$freq) * 100
+    barcodeRange <- range(subset(barcode, x!="unclassified")$freq)
+  } else {
+    barcodes <- nrow(barcode)
+    barcodeUnass = 100
+    barcodeRange <- range(barcode$freq)
+  }
+}
+figures <- 3
+
+df <- data.frame(
+    x = cumsum(c(2, rep(6.5, figures-1))),
+    y = rep(2, figures),
+    h = rep(4, figures),
+    w = rep(6, figures))
+
+    df$info <- c(round(barcodeUnass, digits = 1), barcodes, paste(barcodeRange,collapse="\n"))
+    df$key <- c("Reads with barcode (%)","Barcoded libraries", "barcode variance")
+    df$icon <- fontawesome(c('fa-pie-chart', 'fa-barcode', 'fa-sliders'))
+    df$colour <- rep("steelblue", figures)
+
+
+```
+
+```{r pseudoValueBarcodes, include=TRUE, echo=FALSE, fig.fullwidth = TRUE, dpi=360, fig.width=9, fig.height=2.5}
+if (barcodes > 0) {
+
+MultiplexCharacteristicsValueBoxes <- ggplot(df, aes(x, y, height = h, width = w, label = key, fill = colour)) +
+    geom_tile(fill = brewer.pal(9,"Blues")[7]) +
+    geom_text(color = brewer.pal(9,"Blues")[3], hjust="left", nudge_y=-1.5, nudge_x=-2.6, size=5) +
+    geom_text(label=df$info, size=10, color = brewer.pal(9,"Blues")[2], fontface = "bold", nudge_x=-2.6, hjust="left") +
+    geom_text(label=df$icon, family='fontawesome-webfont', colour=brewer.pal(9,"Blues")[5], size=23, hjust="right", nudge_x=2.85, nudge_y=0.8) +
+    coord_fixed() + 
+    scale_fill_brewer(type = "qual",palette = "Dark2") +
+    theme_void() +
+    guides(fill = F)
+
+
+
+ggsave(file.path("Results", "MultiplexCharacteristicsValueBoxes.png"), plot=MultiplexCharacteristicsValueBoxes, device="png", units="cm", width=25, height=5, dpi=reportDPI)
+
+knitr::include_graphics(file.path("Results", "MultiplexCharacteristicsValueBoxes.png"))
+
+}
+```
+
+
+
+
+```{r convenienceScoringLibraries, echo=FALSE}
+if (barcodes > 0) {
+
+# https://www.ncbi.nlm.nih.gov/assembly/help/
+ncalc <- function(len.vector, n) {
+  # N50 - length such that scaffolds of this length or longer include half the bases of the assembly
+  len.sorted <- rev(sort(len.vector))
+  len.sorted[cumsum(len.sorted) >= sum(len.sorted)*n][1]
+}
+
+lcalc <- function(len.vector, n) {
+  # L50 - number of scaffolds that are longer than, or equal to, the N50 length and therefore include half the bases of the assembly
+  len.sorted <- rev(sort(len.vector))
+  which(cumsum(len.sorted) >= sum(len.sorted)*n)[1]
+}
+
+
+N50 <- ncalc(passedSeqs$sequence_length_template, 0.5)
+N90 <- ncalc(passedSeqs$sequence_length_template, 0.9)
+L50 <- lcalc(passedSeqs$sequence_length_template, 0.5)
+L90 <- lcalc(passedSeqs$sequence_length_template, 0.9)
+
+seqSummary <- function(barcodeId, myBarcode, myVector, myMethod, xlist=NA) {
+  subVector <- myVector[which(myBarcode == barcodeId)]
+  params <- list(subVector)
+  if (!is.na(xlist)) {
+    params <- append(params, xlist)
+  }
+  do.call(myMethod, params)
+}
+
+barcode <- cbind(barcode, mbps=round(unlist(lapply(as.character(barcode$x), seqSummary, myBarcode=passedSeqs$barcode_arrangement, myVector=passedSeqs$sequence_length_template, myMethod="sum")) / 10e6, digits=0))
+
+barcode <- cbind(barcode, min=unlist(lapply(as.character(barcode$x), seqSummary, myBarcode=passedSeqs$barcode_arrangement, myVector=passedSeqs$sequence_length_template, myMethod="min")))
+
+barcode <- cbind(barcode, max=unlist(lapply(as.character(barcode$x), seqSummary, myBarcode=passedSeqs$barcode_arrangement, myVector=passedSeqs$sequence_length_template, myMethod="max")))
+
+barcode <- cbind(barcode, mean=round(unlist(lapply(as.character(barcode$x), seqSummary, myBarcode=passedSeqs$barcode_arrangement, myVector=passedSeqs$sequence_length_template, myMethod="mean")), digits=0))
+
+barcode <- cbind(barcode, N50=unlist(lapply(as.character(barcode$x), seqSummary, myBarcode=passedSeqs$barcode_arrangement, myVector=passedSeqs$sequence_length_template, myMethod="ncalc", xlist=list(n=0.5))))
+
+barcode <- cbind(barcode, L50=unlist(lapply(as.character(barcode$x), seqSummary, myBarcode=passedSeqs$barcode_arrangement, myVector=passedSeqs$sequence_length_template, myMethod="lcalc", xlist=list(n=0.5))))
+
+kable(barcode, format="markdown", caption="Table summarising barcode content")
+}
+```
+
+
+```{r demultiplex_plot, include=TRUE, echo=FALSE, cache=FALSE, fig.margin=TRUE}
+if (barcodes > 0) {
+  if ("barcode_arrangement" %in% names(passedSeqs)) {
+    # it's a run that used the --barcoding flag
+  
+    #library(extrafont)
+    #loadfonts(device = "win")
+    ggplot(barcode, aes(x, freq, fill=x)) +
+        geom_bar(stat="identity", width=0.5, fill="#9ecae1") +
+        xlab("\nDemultiplexed barcodes") + 
+        ylab("\nFrequency") +
+        scale_y_continuous(expand = c(0,0)) +
+      labs(title="Histogram showing abundance of different barcodes") +
+        theme(axis.text.x = element_text(angle=45, hjust=1))
+  }
+}
+```
+
+
+
+\pagebreak
+
+
+
+# Glossary of Terms
+
+* __knit__ is the command to render an Rmarkdown file. The knitr package is used to embed code, the results of R analyses and their figures within the typeset text from the document. 
+
+* __L50__  the number of sequences (or contigs etc) that are longer than, or equal to, the N50 length and therefore include half the bases of the assembly
+
+* __N50__  length such that sequences (or contigs etc) of this length or longer include half the bases of the sequence collection
+
+* __Rmarkdown__ is an extension to markdown. Functional R code can be embedded in a plain-text document and subsequently rendered to other formats including the PDF format of this report.
+
+* __QV__  the quality value - -log10(p) that any given base is incorrect. QV may be either at the individual base level, or may be averaged across whole sequences
+
+* __sequencing_summary.txt__ a summary file describing sequence characteristics following base calling with the Guppy / Albacore software.
+
+
+
+# Reproducible Research - Produce your own report
+
+This report has been created using **`Rmarkdown`**, publicly available **`R`** packages, and the \LaTeX document typesetting software for reproducibility. For clarity the **`R`** packages used, and their versions, is listed below.
+
+\fontsize{8}{12}
+
+```{r sessionInfo, eval=TRUE, echo=FALSE, comment=NA}
+options(width = 100)
+utils:::print.sessionInfo(sessionInfo()[-7], locale=FALSE)
+```
+
+\fontsize{10}{14}
+
+
+`r slurpContent("Static/TutorialPostamble.md")`
+
+
+
