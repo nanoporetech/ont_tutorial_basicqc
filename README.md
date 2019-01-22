@@ -52,6 +52,7 @@ Other dependencies include
 2. Download Nanopore QC tutorial & example files into a folder named `QCTutorial`. This tutorial requires the **`git-lfs`** large file support capabilities; this should be installed first through **`conda`**
 ```
     conda install -c conda-forge git-lfs
+    git lfs install
     git clone https://github.com/nanoporetech/ont_tutorial_basicqc.git QCTutorial
 ```
 3. Change working directory into the new `QCTutorial` folder

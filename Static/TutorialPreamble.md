@@ -34,6 +34,7 @@ Sufficient information is provided in the tutorial such that the workflow can be
 2. Download Nanopore QC tutorial & example files into a folder named `QCTutorial`. This tutorial requires the **`git-lfs`** large file support capabilities; this should be installed first through **`conda`**
 ```
     conda install -c conda-forge git-lfs
+    git lfs install
     git clone https://github.com/nanoporetech/ont_tutorial_basicqc.git QCTutorial
 ```
 3. Change working directory into the new `QCTutorial` folder
@@ -126,6 +127,7 @@ The installation of the **`git-lfs`** extensions and download of the tutorial fi
 
 ```
 conda install -c conda-forge git-lfs
+git lfs install
 git clone https://github.com/nanoporetech/ont_tutorial_basicqc.git QCTutorial
 
 # Change into the created `QCTutorial` directory
@@ -133,7 +135,7 @@ cd QCTutorial
 
 ```
 
-Thiswill download a collection of files into a new folder called `BasicQC`. The files downloaded include
+This will download a collection of files into a new folder called `QCTutorial`. The files downloaded include
 
 1. The Rmarkdown file, **`Nanopore_SumStatQC_Tutorial.Rmd`**, includes this documentation and performs the analysis.
 1. **`RawData/lambda_sequencing_summary.txt.bz2`** is a summary statistic file describing approximately 1 million sequence reads from a barcoded lambda DNA sequencing run. These sequence reads have been base-called using the Guppy software. This file has been bzip2 compressed.
