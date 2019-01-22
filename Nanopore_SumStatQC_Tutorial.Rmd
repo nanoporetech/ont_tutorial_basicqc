@@ -3,7 +3,7 @@ title: "Nanopore Summary Statistics and Basic QC tutorial"
 date: "Report created: `r Sys.Date()`"
 output:
   html_document:
-    keep_md: yes
+    keep_md: no
     number_sections: yes
     self_contained: yes
     theme: default
@@ -20,9 +20,9 @@ bibliography: Static/Bibliography.bib
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tufte'))
+
+knitr::opts_chunk$set(fig.width=9, fig.height=6, warning=FALSE, message=FALSE, tidy = FALSE, cache.extra = packageVersion('tufte'), cache.path = "Results/KnitR")
 options(htmltools.dir.version = FALSE)
-knitr::opts_chunk$set(fig.width=9, fig.height=6, warning=FALSE, message=FALSE)
 
 library(data.table)
 library(digest)
