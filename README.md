@@ -25,7 +25,7 @@ Sufficient information is provided in the tutorial such that the workflow can be
 
 ### Input and Output: 
 
-This tutorial uses the R markdown contained within this Github repository, a **`sequence_summary.txt`** file from the Guppy base-calling software, and optionally a **`barcoding_summary.txt`** file from Guppy barcoding as input. Example summary files are included within the repository. The result of the tutorial will be a tutorial document in **`html`** format. This workflow can also process the `sequence_summary.txt` file prepared by the **`albacore`** base calling software/
+This tutorial uses the R markdown contained within this Github repository, a **`sequence_summary.txt`** file from the Guppy base-calling software, and optionally a **`barcoding_summary.txt`** file from Guppy barcoding as input. Example summary files are included within the repository. The result of the tutorial will be a tutorial document in **`html`** format. This workflow can also process the `sequence_summary.txt` file prepared by the **`albacore`** base calling software.
 
 ### Dependencies:
 

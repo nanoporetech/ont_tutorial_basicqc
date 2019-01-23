@@ -1,8 +1,8 @@
-# Tutorial Objectives
+# Tutorial objectives
 
-The **Summary Statistics and QC tutorial** is intended as a functional guide to help assess the quality characteristics of a single Nanopore sequence run. This tutorial aims to enable an objective assessment of the performance of a Nanopore flowcell run and to assess the sequence characteristics to benchmark quality. 
+The **Summary statistics and QC tutorial** is intended as a functional guide to help assess the quality characteristics of a single Nanopore sequencing run. This tutorial aims to enable an objective assessment of the performance of a Nanopore flowcell run and to assess the sequence characteristics to benchmark quality. 
 
-Sufficient information is provided in the tutorial such that the workflow can be tested, validated, and replicated. The tutorial is provided with an example dataset from a barcoded sequence library. The tutorial is intended to address important questions;
+Sufficient information is provided in the tutorial that the workflow can be tested, validated and replicated. The tutorial is provided with an example dataset from a barcoded sequence library. The tutorial is intended to address important questions;
 
 * how many reads (and how many gigabases) were sequenced?
 * what fraction of my sequence collection is good quality?
@@ -17,7 +17,7 @@ Sufficient information is provided in the tutorial such that the workflow can be
 **Computational requirements** for this tutorial include 
 
 * Computer running Linux (Centos7, Ubuntu 18_10, Fedora 29) 
-* At least 8Gb RAM 
+* At least 8 Gb RAM 
 * Runtime with provided example data - approximately 10 minutes
 
 
@@ -49,7 +49,7 @@ Sufficient information is provided in the tutorial such that the workflow can be
 ```
     source activate BasicQC
 ```
-6. *optional* edit the provided **`config.yaml`** file to match your own study design
+6. *Optional:* edit the provided **`config.yaml`** file to match your own study design
 7. Render the report using results from the analysis above
 ```
     R --slave -e 'rmarkdown::render("Nanopore_SumStatQC_Tutorial.Rmd", "html_document")'
@@ -69,9 +69,9 @@ This tutorial aims to summarise the data characteristics from an Oxford Nanopore
 
 This tutorial document has been produced from an **`Rmarkdown`** template. This template is intended as the starting point for your exploration and assessement of Oxford Nanopore DNA sequence data. The goals from this tutorial include
 
-1. To introduce a literate framework for analysing base-calling summary statistics to evaluate relative performance of runs
-1. To provide basic QC metrics such that a review and consideration of experimental data can be undertaken 
-1. To provide training as to which QC metrics are of most interest and to encourage an understanding as to how different aspects of sequence data quality can be attributed to sample characteristics from DNA isolation and library preparation.
+1. To introduce a literate framework for analysing base-calling summary statistics to evaluate the relative performance of runs
+1. To provide basic QC metrics so that a review and consideration of experimental data can be undertaken 
+1. To provide training as to which QC metrics are of most interest and to encourage an understanding of how different aspects of sequence data quality can be attributed to sample characteristics from DNA isolation and library preparation.
 
 Several of the plots included in this report have been replicated from publicly available projects such as POREquality [^1], minion_qc [^2], and pycoQC [^3]. 
 
@@ -79,7 +79,7 @@ Several of the plots included in this report have been replicated from publicly 
 [^2]: [roblanf/minion_qc](https://github.com/roblanf/minion_qc)
 [^3]: [a-slide/pycoQC](https://github.com/a-slide/pycoQC)
 
-The **`sequence_summary.txt`** file is automatically produced during base-calling with the Guppy and Albacore software. This summary file contains rich metadata for each sequence read produced during a run. These data include timestamp, pore duration, read quality, and channel information, in addition to the characteristics of the resulting DNA sequence. This tutorial uses this summary file for performance reasons. 
+The **`sequence_summary.txt`** file is automatically produced during base-calling with the Guppy software. This summary file contains rich metadata for each sequence read produced during a run. These data include timestamp, pore duration, read quality, and channel information, in addition to the characteristics of the resulting DNA sequence. This tutorial uses this summary file for performance reasons. 
 
 Tools such as wub [^4] utilise the **`fastq`** files for quality metrics, and other tools make extensive use of the **`fast5`** files. Parsing the **`fast5`** files provides additional analytical context but is much more demanding in terms of compute resource and time. This tutorial is lightweight and is intended to run within a few minutes on a desktop computer.
 
@@ -88,11 +88,11 @@ Tools such as wub [^4] utilise the **`fastq`** files for quality metrics, and ot
 
 # Setup a computational environment for your QC analysis
 
-This tutorial is intended to be simple to install, run, and customise. The analysis is performed using the **`R`** statistical software and further functionality is provided by a number of **`R packages`** and the **`RStudio`** graphical user interface. The following steps describe a simple approach to installing the tutorial and its dependencies.
+This tutorial is intended to be simple to install, run and customise. The analysis is performed using the **`R`** statistical software and further functionality is provided by a number of **`R packages`** and the **`RStudio`** graphical user interface. The following steps describe a simple approach to installing the tutorial and its dependencies.
 
 ## Conda package management software
 
-**`Conda`** provides simple software package management. A wide variety of bioinformatics and scientific computing software has been deployed within Conda and it provides a streamlined way to install both software packages and their required dependencies without the requirement for administrative rights. Conda is available for Linux, macOS, and Windows - not all software packages are available for all platforms though. These installation instructions assume that you are using the **`BASH`** shell interface to your computer.
+**`Conda`** provides simple software package management. A wide variety of bioinformatics and scientific computing software has been deployed within Conda and it provides a streamlined way to install both software packages and their required dependencies without the requirement for administrative rights. These installation instructions assume that you are using the **`BASH`** shell interface to your computer.
 
 Install the Conda software on your computer using the instructions provided at [https://conda.io/docs/install/quick.html](https://conda.io/docs/install/quick.html)
 
@@ -107,9 +107,9 @@ bash Miniconda3-latest-Linux-x86_64.sh
 bash
 ```
 
-The commands here (1) download the Conda installer, (2) Install conda, and (3) reload your bash shell, and make the new Conda installation available.
+The commands here are used to (1) download the Conda installer, (2) Install conda and (3) reload your bash shell, and make the new Conda installation available.
 
-It is recommended that the Conda installer be allowed to prepend the Conda path to your **`.bashrc`** file. This makes Conda available each time  you log in to the system. If Conda does not add this path, you should either edit your own `.bashrc` file or initialise your Conda environment manually with the instructions provided.
+We recommend that the Conda installer be allowed to prepend the Conda path to your **`.bashrc`** file. This makes Conda available each time  you log in to the system. If Conda does not add this path, you should either edit your own `.bashrc` file or initialise your Conda environment manually with the instructions provided.
 
 Check that Conda has been installed with the commands
 
@@ -121,7 +121,7 @@ conda --version
 
 ## Download the tutorial files
 
-The tutorial documents and example data are contained on the [Oxford Nanopore Technologies Github site](www.github.com/nanoporetech). This Basic QC tutorial is contained within a project called **`ont_tutorial_basicqc`**. The tutorial download requires the **`large file support (lfs)`** extensions to **`git`** - the summary files from **`Guppy`** base-calling and de-multiplexing that are distributed with the tutorial are not tiny files.
+The tutorial documents and example data are contained on the [Oxford Nanopore Technologies Github site](www.github.com/nanoporetech). This Basic QC tutorial is contained within a project called **`ont_tutorial_basicqc`**. The tutorial download requires the **`large file support (lfs)`** extensions to **`git`** - the summary files from **`Guppy`** base-calling and de-multiplexing that are distributed with the tutorial are relatively large files.
 
 The installation of the **`git-lfs`** extensions and download of the tutorial files and accompanying dataset can be performed with the commands
 
@@ -145,7 +145,7 @@ This will download a collection of files into a new folder called `QCTutorial`. 
 1. **`config.yaml`** is a text file (in yaml format) that describes the sequence summary statistic files to be analysed. This is the main file to be edited to describe your own analysis.
 
 
-## Build a conda environment
+## Build a Conda environment
 
 In the previous section we downloaded the project files. This download includes the file, `environment.yaml` that can be used to initialise a **`Conda`** working environment. To create a Conda environment arbitrarily named `BasicQC` we should use the commands
 
@@ -158,7 +158,7 @@ source activate BasicQC
 # Run the analysis
 
 
-The analysis of the sequences specified within the **`Rmarkdown`** file will be performed as part of the **`knit`** process. This will load the **`summary_statistics`** file, will prepare a sequence analysis, render figures and prepare the report. To start the analysis, it is only necessary to click the  **`knit`** button in the **`Rstudio`** software - please see figure \ref{fig:KnitIt} below. The **`Rstudio`** software can be opened with the tutorial markdown document with the command 
+Analysis of the sequences specified within the **`Rmarkdown`** file will be performed as part of the **`knit`** process. This will load the **`summary_statistics`** file, will prepare a sequence analysis, render figures and prepare the report. To start the analysis, it is only necessary to click the  **`knit`** button in the **`Rstudio`** software - please see figure \ref{fig:KnitIt} below. The **`Rstudio`** software can be opened with the tutorial markdown document with the command 
 
 ```
 rstudio Nanopore_SumStatQC_Tutorial.Rmd
