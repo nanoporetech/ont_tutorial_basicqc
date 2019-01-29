@@ -744,7 +744,7 @@ seqSummary <- function(barcodeId, myBarcode, myVector, myMethod, xlist=NA) {
 
 barcodedata <- cbind(barcodedata, "%"=round(barcodedata$freq / sum(barcodedata$freq) * 100, digits=1))
 
-barcodedata <- cbind(barcodedata, Mb=round(unlist(lapply(as.character(barcodedata$barcode), seqSummary, myBarcode=passedSeqs$barcode_arrangement, myVector=passedSeqs$sequence_length_template, myMethod="sum")) / 10e6, digits=0))
+barcodedata <- cbind(barcodedata, Mb=round(unlist(lapply(as.character(barcodedata$barcode), seqSummary, myBarcode=passedSeqs$barcode_arrangement, myVector=passedSeqs$sequence_length_template, myMethod="sum")) / 1e06, digits=0))
 
 barcodedata <- cbind(barcodedata, min=unlist(lapply(as.character(barcodedata$barcode), seqSummary, myBarcode=passedSeqs$barcode_arrangement, myVector=passedSeqs$sequence_length_template, myMethod="min")))
 
