@@ -758,7 +758,6 @@ barcodedata <- cbind(barcodedata, L50=unlist(lapply(as.character(barcodedata$bar
 
 kable(barcodedata, format="markdown", caption="Table summarising barcode content")
 
-
 }
 ```
 
