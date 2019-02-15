@@ -19,6 +19,12 @@ link-citations: yes
 bibliography: Static/Bibliography.bib
 ---
 
+<div style="position:absolute;top:0px;right:0px;padding:15px;background-color:gray;width:45%;">
+```{r, echo=FALSE}
+knitr::include_graphics("https://nanoporetech.com/themes/custom/nanopore/images/ont-logo.svg?tutorial=basicqc")
+```
+</div>
+
 ```{r setup, include=FALSE}
 
 knitr::opts_chunk$set(fig.width=9, fig.height=6, warning=FALSE, message=FALSE, tidy = FALSE, cache.extra = packageVersion('tufte'), cache.path = "Results/KnitR")
