@@ -361,7 +361,7 @@ ggplot(binnedBaseMelt, aes(x=length, fill=variable, y=value)) +
 ```
 
 
-The weighted read length histogram above shows the binned distribution of sequence length against number of sequence nucleotides contained within the bin. This plot will show clear peaks if for example, amplicons are sequenced or if size selection has been performed. The histogram includes annotations for N50 and mean sequence sizes. N50 describes the sequence length where 50% of the sequenced bases are contained within reads of this length, or longer. The mean sequence length is the average sequence length across the whole sequence collection.
+The weighted read length histogram above shows the binned distribution of sequence length against number of sequence nucleotides contained within the bin. This plot will show clear peaks if for example, amplicons are sequenced or if size selection has been performed. The histogram includes annotations for N50 and mean sequence sizes. N50 describes the sequence length where 50% of the sequenced bases are contained within reads of this length, or longer. The mean sequence length is the average sequence length across the whole sequence collection. The N50 and mean sequence lengths plotted are calculated from only the sequence reads that pass QC.
 
 
 ```{r lengthdistribution, include=TRUE, cache=FALSE, fig.fullwidth=FALSE, echo=FALSE}
@@ -392,7 +392,7 @@ ggplot(binnedReadMelt, aes(x=length, fill=variable, y=value)) +
 
 
 \hfill\break
-A histogram of mean QV scores reveals the relative abundance of sequences of different qualities. The distribution of sequence qualities is shaded by the QV filter pass status. This QV filter is applied during the base-calling process as a modifiable parameter. For downstream analyses we recommend processing only the higher-quality sequence reads. The histogram includes annotations for N50 and mean sequence sizes. N50 describes the sequence length where 50% of the sequenced bases are contained within reads of this length, or longer. The mean sequence length is the average sequence length across the whole sequence collection.
+A histogram of mean QV scores reveals the relative abundance of sequences of different qualities. The distribution of sequence qualities is shaded by the QV filter pass status. This QV filter is applied during the base-calling process as a modifiable parameter. For downstream analyses we recommend processing only the higher-quality sequence reads. The histogram includes annotations for N50 and mean sequence sizes. N50 describes the sequence length where 50% of the sequenced bases are contained within reads of this length, or longer. The mean sequence length is the average sequence length across the whole sequence collection. The N50 and mean sequence lengths plotted are calculated from only the sequence reads that pass QC.
 \hfill\break
 
 ```{r QvalueDistributions, include=TRUE, cache=FALSE, echo=FALSE, fig.margin=FALSE}
