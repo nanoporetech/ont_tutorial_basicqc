@@ -260,7 +260,7 @@ ggplot(channelMap, aes(x = row, y = col, fill = count)) +
 
 # Quality and length
 
-The distribution of base-called DNA sequence lengths and their accompanying qualities are key metrics for the review of a sequencing library. This section of the QC review tutorial assesses the length and quality distributions for reads from this flowcell. We will review the total collection of sequences, including those that fail the mean quality filter.
+The distribution of base-called DNA sequence lengths and their accompanying qualities are key metrics for the review of a sequencing library. This section of the QC review tutorial assesses the length and quality distributions for reads from this flowcell. We will review the total collection of sequences, including those that fail the mean quality filter. The information plot below summarises key metrics from the sequence library. Mean read length, N50, mean read quality and longest read are calculated from the reads that pass the QC threshold. Mean failed QC is calculated from only the reads that failed QC.
 
 
 ```{r summaryStatMeasures, include=FALSE, echo=FALSE}
