@@ -1,5 +1,13 @@
-![.](Static/Images/ONT_logo.png "Oxford Nanopore Technologies")
+![.](Static/Images/ONT_logo_deprecated.png "This Oxford Nanopore Technologies repo is deprecated")
 
+******************
+
+******************
+The BasicQC tutorial functionality has been moved to our new EPI2ME Labs product. Please see the EPI2ME Labs documentation at [https://labs.epi2me.io] and have a look at the product's GitHub pages at [https://github.com/epi2me-labs].
+
+The EPI2ME Labs product provides a collection of tutorials and best-practise guidelines for processing Nanopore sequence data. The product is provided in a maintained docker container and interactive tutorials are provided through Jupyter notebooks. The Jupyter experience has been customised and provides exciting new material through interactive menus, genome browsers and more.
+
+This repository is now unsupported and we do not recommend its use. Please contact Oxford Nanopore: support@nanoporetech.com for help with your application if it is not possible to upgrade to our new resources, or we are missing key features.
 ******************
 
 # 1. Introduction:
